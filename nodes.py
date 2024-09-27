@@ -2,7 +2,15 @@ import comfy.utils
 import comfy.model_management as mm
 import folder_paths
 # Requires transformers >= 4.45.0
-from transformers import LlavaForConditionalGeneration, MllamaForConditionalGeneration, AutoProcessor, BitsAndBytesConfig, set_seed
+from transformers import (
+    LlavaForConditionalGeneration,
+    MllamaForConditionalGeneration,
+    AutoProcessor,
+    AutoModelForCausalLM,
+    BitsAndBytesConfig,
+    GenerationConfig,
+    set_seed
+)
 from torchvision.transforms.functional import to_pil_image
 from PIL import Image
 import time
@@ -12,11 +20,17 @@ import re
 
 pixtral_model_dir = os.path.join(folder_paths.models_dir, "pixtral")
 llama_vision_model_dir = os.path.join(folder_paths.models_dir, "llama-vision")
+molmo_model_dir = os.path.join(folder_paths.models_dir, "molmo-vision")
+
 # Add pixtral and llama-vision folders if not present
-if not os.path.exists(pixtral_model_dir):
-    os.makedirs(pixtral_model_dir)
-if not os.path.exists(llama_vision_model_dir):
-    os.makedirs(llama_vision_model_dir)
+#if not os.path.exists(pixtral_model_dir):
+#    os.makedirs(pixtral_model_dir)
+#if not os.path.exists(llama_vision_model_dir):
+#    os.makedirs(llama_vision_model_dir)
+for dir_path in [pixtral_model_dir, llama_vision_model_dir, molmo_model_dir]:
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
 
 class PixtralModelLoader:
     """Loads a Pixtral model. Add models as folders inside the `ComfyUI/models/pixtral` folder. Each model folder should contain a standard transformers loadable safetensors model along with a tokenizer and any config files needed."""
@@ -181,7 +195,98 @@ class LlamaVisionGenerateText:
         print(output)
         return (output,)
 
+#Molmo
 
+class MolmoModelLoader:
+    """Loads a Molmo model. Add models as folders inside the `ComfyUI/models/molmo` folder. Each model folder should contain a standard transformers loadable model along with a tokenizer and any config files needed."""
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model_name": ([item.name for item in Path(molmo_model_dir).iterdir() if item.is_dir()],),
+            }
+        }
+
+    RETURN_TYPES = ("MOLMO_MODEL",)
+    FUNCTION = "load_model"
+    CATEGORY = "PixtralLlamaVision/Molmo"
+    TITLE = "Load Molmo Model"
+
+    def load_model(self, model_name):
+        model_path = os.path.join(molmo_model_dir, model_name)
+        device = mm.get_torch_device()
+        arguments = {"device_map": device, "torch_dtype": "auto", "trust_remote_code": True}
+        model = AutoModelForCausalLM.from_pretrained(model_path, **arguments)
+        processor = AutoProcessor.from_pretrained(model_path, **arguments)
+        molmo_model = {
+            'model': model,
+            'processor': processor,
+        }
+        return (molmo_model,)
+
+class MolmoGenerateText:
+    """Generates text using a Molmo model. Takes a list of images and a string prompt as input."""
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "molmo_model": ("MOLMO_MODEL",),
+                "images": ("IMAGE",),
+                "prompt": ("STRING", {"default": "Describe this image.", "multiline": True}),
+                "max_new_tokens": ("INT", {"default": 256, "min": 1, "max": 4096}),
+                "do_sample": ("BOOLEAN", {"default": True}),
+                "temperature": ("FLOAT", {"default": 0.3, "min": 0, "step": 0.1}),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffff}),
+                "include_prompt_in_output": ("BOOLEAN", {"default": False})
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    FUNCTION = "generate_text"
+    CATEGORY = "PixtralLlamaVision/Molmo"
+    TITLE = "Generate Text with Molmo"
+
+    def generate_text(self, molmo_model, images, prompt, max_new_tokens, do_sample, temperature, seed, include_prompt_in_output):
+        device = molmo_model['model'].device
+        print(f"Batch of {images.shape} images")
+        image_list = [to_pil_image(image.numpy()) for image in images]
+        
+        inputs = molmo_model['processor'].process(
+            images=image_list,
+            text=prompt,
+        )
+        inputs = {k: v.to(device).unsqueeze(0) for k, v in inputs.items()}
+        
+        prompt_tokens = inputs["input_ids"].size(1)
+        print(f"Prompt tokens: {prompt_tokens}")
+        
+        set_seed(seed)
+        t0 = time.time()
+        output = molmo_model['model'].generate_from_batch(
+            inputs,
+            GenerationConfig(
+                max_new_tokens=max_new_tokens,
+                do_sample=do_sample,
+                temperature=temperature,
+                stop_strings="<|endoftext|>"
+            ),
+            tokenizer=molmo_model['processor'].tokenizer,
+        )
+        t1 = time.time()
+        
+        total_time = t1 - t0
+        generated_tokens = output.size(1) - prompt_tokens
+        time_per_token = generated_tokens/total_time
+        print(f"Generated {generated_tokens} tokens in {total_time:.3f} s ({time_per_token:.3f} tok/s)")
+        
+        if include_prompt_in_output:
+            generated_text = molmo_model['processor'].tokenizer.decode(output[0], skip_special_tokens=True)
+        else:
+            generated_text = molmo_model['processor'].tokenizer.decode(output[0, prompt_tokens:], skip_special_tokens=True)
+        
+        print(generated_text)
+        return (generated_text,)
+        
 # Utility for bounding boxes (I'm sure this has been done before but I just wanted to try it out to see how well Pixtral can do it)
 class ParseBoundingBoxes:
     """Uses a regular expression to find bounding boxes in a string, returning a list of bbox objects (compatible with mtb). `relative` means the bounding box uses float values between 0 and 1 if true and absolute image coordinates if false. `corners_only` means the bounding box is [(x1, y1), (x2, y2)] if true and [(x1, y1), (width, height)] if false. Parentheses are treated as optional."""
@@ -425,12 +530,14 @@ class SliceList:
 
 NODE_CLASS_MAPPINGS = {
     "PixtralModelLoader": PixtralModelLoader,
-    "PixtralGenerateText": PixtralGenerateText,
+    "PixtralGenerateText": PixtralGenerateText,    
     # Not really much need to work with the image tokenization directly for something like image captioning, but might be interesting later...
     #"PixtralImageEncode": PixtralImageEncode,
     #"PixtralTextEncode": PixtralTextEncode,
     "LlamaVisionModelLoader": LlamaVisionModelLoader,
     "LlamaVisionGenerateText": LlamaVisionGenerateText,
+    "MolmoModelLoader": MolmoModelLoader,
+    "MolmoGenerateText": MolmoGenerateText,    
     "RegexSplitString": RegexSplitString,
     "RegexSearch": RegexSearch,
     "RegexFindAll": RegexFindAll,
