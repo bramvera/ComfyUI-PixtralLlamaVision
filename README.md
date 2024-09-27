@@ -1,8 +1,9 @@
 # ComfyUI-PixtralLlamaVision + Molmo
- Do not clone it, this is for debug and test only, please clone it from SeanScripts/ComfyUI-PixtralLlamaVision
+ Do not clone it unless you want to test Molmo, this is for debug and test only, please clone it from SeanScripts/ComfyUI-PixtralLlamaVision
  For loading and running Pixtral and Llama 3.2 Vision models
-Molmo Model:
-https://huggingface.co/cyan2k/molmo-7B-D-bnb-4bit
+
+ ### Molmo Model:
+ https://huggingface.co/cyan2k/molmo-7B-D-bnb-4bit
 
 Includes six nodes:
 - Load Molmo Model
