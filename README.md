@@ -36,6 +36,8 @@ You can get a 4-bit quantized version of Pixtral-12B and/or Llama-3.2-11B-Vision
 Unfortunately, the Pixtral nf4 model has considerably degraded performance on some tasks, like OCR. The Llama Vision model seems to be better for this task.
 
 ## Examples
+Example of Molmo D (based on Qwen2-7B) BNB (you need to install tensorflow)
+![image](https://github.com/user-attachments/assets/a91d3d75-19e0-4091-846f-42232395c4d7)
 
 Example Pixtral image captioning (not saving the output to a text file in this example):
 ![Example Pixtral image captioning workflow](pixtral_caption_example.jpg)
