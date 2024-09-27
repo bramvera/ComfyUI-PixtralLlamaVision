@@ -1,4 +1,5 @@
 # ComfyUI-PixtralLlamaVision
+ Do not clone it, this is for debug and test only, please clone it from SeanScripts/ComfyUI-PixtralLlamaVision
  For loading and running Pixtral and Llama 3.2 Vision models
 
 Includes four nodes:
