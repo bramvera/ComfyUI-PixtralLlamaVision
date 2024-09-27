@@ -1,8 +1,12 @@
 # ComfyUI-PixtralLlamaVision + Molmo
  Do not clone it, this is for debug and test only, please clone it from SeanScripts/ComfyUI-PixtralLlamaVision
  For loading and running Pixtral and Llama 3.2 Vision models
+Molmo Model:
+https://huggingface.co/cyan2k/molmo-7B-D-bnb-4bit
 
-Includes four nodes:
+Includes six nodes:
+- Load Molmo Model
+- Generate Text with Molmo
 - Load Pixtral Model
 - Generate Text with Pixtral
 - Load Llama Vision Model
@@ -28,6 +32,7 @@ If you install by cloning this repo into your custom nodes folder, you'll need t
 Models should be placed in the `ComfyUI/models/pixtral` and `ComfyUI/models/llama-vision` folders, with each model inside a folder with the `model.safetensors` file along with any config files and the tokenizer.
 
 You can get a 4-bit quantized version of Pixtral-12B and/or Llama-3.2-11B-Vision-Instruct which is compatible with these custom nodes here:
+
 
 [https://huggingface.co/SeanScripts/pixtral-12b-nf4](https://huggingface.co/SeanScripts/pixtral-12b-nf4)
 
